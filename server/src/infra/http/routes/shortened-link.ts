@@ -1,34 +1,314 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { z } from 'zod'
+import { createShortenedLink } from '@/app/functions/create-shortened-link'
+import { deleteShortenedLink } from '@/app/functions/delete-shortened-link'
+import { getShortenedLinkById } from '@/app/functions/get-shortened-link-by-id'
+import { getShortenedLinks } from '@/app/functions/get-shortened-links'
+import { isLeft, unwrapEither } from '@/infra/shared/either'
 
 export const shortenedLinkRoutes: FastifyPluginAsyncZod = async server => {
+  server.get(
+    '/shortened-links',
+    {
+      schema: {
+        tags: ['shortened-links'],
+        summary: 'List shortened links',
+        description:
+          'Retrieves a paginated list of shortened links with optional search and sorting. Search works on both URL and shortened URL fields.',
+        querystring: z.object({
+          searchQuery: z
+            .string()
+            .optional()
+            .describe('Search term to filter by URL or shortened URL'),
+          sortBy: z
+            .enum(['createdAt', 'url', 'shortenedUrl', 'visits'])
+            .optional()
+            .describe('Field to sort by'),
+          sortDirection: z
+            .enum(['asc', 'desc'])
+            .optional()
+            .describe('Sort direction (ascending or descending)'),
+          page: z
+            .string()
+            .optional()
+            .transform(val => (val ? Number(val) : 1))
+            .describe('Page number (default: 1)'),
+          pageSize: z
+            .string()
+            .optional()
+            .transform(val => (val ? Number(val) : 20))
+            .describe('Number of items per page (default: 20)'),
+        }),
+        response: {
+          200: z
+            .object({
+              shortenedLinks: z.array(
+                z.object({
+                  id: z.string().describe('The unique identifier'),
+                  url: z.string().describe('The original URL'),
+                  shortenedUrl: z.string().describe('The shortened URL identifier'),
+                  visits: z.number().describe('Number of times the link has been visited'),
+                  createdAt: z.string().describe('Creation timestamp'),
+                  updatedAt: z.string().describe('Last update timestamp'),
+                })
+              ),
+              total: z.number().describe('Total number of shortened links'),
+              page: z.number().describe('Current page number'),
+              pageSize: z.number().describe('Number of items per page'),
+              totalPages: z.number().describe('Total number of pages'),
+            })
+            .describe('Successfully retrieved shortened links'),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { searchQuery, sortBy, sortDirection, page, pageSize } = request.query
+
+      const result = await getShortenedLinks({
+        searchQuery,
+        sortBy,
+        sortDirection,
+        page,
+        pageSize,
+      })
+
+      const data = unwrapEither(result)
+
+      return reply.status(200).send({
+        shortenedLinks: data.shortenedLinks.map(link => ({
+          id: link.id,
+          url: link.url,
+          shortenedUrl: link.shortenedUrl,
+          visits: link.visits,
+          createdAt: link.createdAt.toISOString(),
+          updatedAt: link.updatedAt.toISOString(),
+        })),
+        total: data.total,
+        page: data.page,
+        pageSize: data.pageSize,
+        totalPages: data.totalPages,
+      })
+    }
+  )
+
+  server.get(
+    '/shortened-links/:id',
+    {
+      schema: {
+        tags: ['shortened-links'],
+        summary: 'Get a shortened link by ID',
+        description:
+          'Retrieves a single shortened link by its unique identifier. Returns the complete link information including visit count and timestamps.',
+        params: z.object({
+          id: z.string().uuid({ message: 'Invalid ID format' }).describe('The unique identifier of the shortened link'),
+        }),
+        response: {
+          200: z
+            .object({
+              id: z.string().describe('The unique identifier'),
+              url: z.string().describe('The original URL'),
+              shortenedUrl: z.string().describe('The shortened URL identifier'),
+              visits: z.number().describe('Number of times the link has been visited'),
+              createdAt: z.string().describe('Creation timestamp'),
+              updatedAt: z.string().describe('Last update timestamp'),
+            })
+            .describe('Successfully retrieved shortened link'),
+          400: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Validation error - invalid ID format'),
+          404: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Not found - shortened link does not exist'),
+          500: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Internal server error'),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params
+
+      const result = await getShortenedLinkById({ id })
+
+      if (isLeft(result)) {
+        const error = unwrapEither(result)
+
+        if (error.message.includes('Validation error')) {
+          return reply.status(400).send({
+            message: error.message,
+          })
+        }
+
+        if (error.message.includes('not found')) {
+          return reply.status(404).send({
+            message: error.message,
+          })
+        }
+
+        return reply.status(500).send({
+          message: 'An unexpected error occurred',
+        })
+      }
+
+      const shortenedLink = unwrapEither(result)
+
+      return reply.status(200).send({
+        id: shortenedLink.id,
+        url: shortenedLink.url,
+        shortenedUrl: shortenedLink.shortenedUrl,
+        visits: shortenedLink.visits,
+        createdAt: shortenedLink.createdAt.toISOString(),
+        updatedAt: shortenedLink.updatedAt.toISOString(),
+      })
+    }
+  )
+
   server.post(
     '/shortened-links',
     {
       schema: {
         tags: ['shortened-links'],
         summary: 'Create a shortened link',
-        description: 'Create a shortened link',
+        description:
+          'Creates a new shortened link. The URL will be normalized (trailing slashes removed, query parameters sorted) for consistency. The shortened URL must be unique and contain only alphanumeric characters, hyphens, and underscores.',
         body: z.object({
-          url: z.url(),
-          shortenedUrl: z.string(),
+          url: z.string().url({ message: 'Invalid URL format' }).max(2048).describe('The original URL to shorten'),
+          shortenedUrl: z
+            .string()
+            .min(1)
+            .max(50)
+            .regex(
+              /^[a-zA-Z0-9_-]+$/,
+              'Shortened URL must contain only alphanumeric characters, hyphens, and underscores'
+            )
+            .describe('The unique shortened URL identifier (e.g., "abc123")'),
         }),
         response: {
-          201: z.object({
-            shortenedUrl: z.string(),
-          }),
+          201: z
+            .object({
+              id: z.string().describe('The unique identifier of the shortened link'),
+              url: z.string().describe('The normalized original URL'),
+              shortenedUrl: z.string().describe('The shortened URL identifier'),
+              createdAt: z.string().describe('The creation timestamp'),
+            })
+            .describe('Successfully created shortened link'),
+          400: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Validation error - invalid input'),
           409: z
             .object({
               message: z.string(),
             })
-            .describe('Shortened link already exists'),
+            .describe('Conflict - shortened URL already exists'),
+          500: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Internal server error'),
         },
       },
     },
     async (request, reply) => {
+      const { url, shortenedUrl } = request.body
+
+      const result = await createShortenedLink({ url, shortenedUrl })
+
+      if (isLeft(result)) {
+        const error = unwrapEither(result)
+
+        if (error.message.includes('Validation error')) {
+          return reply.status(400).send({
+            message: error.message,
+          })
+        }
+
+        if (error.message.includes('already exists')) {
+          return reply.status(409).send({
+            message: error.message,
+          })
+        }
+
+        return reply.status(500).send({
+          message: 'An unexpected error occurred',
+        })
+      }
+
+      const shortenedLink = unwrapEither(result)
+
       return reply.status(201).send({
-        shortenedUrl: 'https://brev.ly/1234567890',
+        id: shortenedLink.id,
+        url: shortenedLink.url,
+        shortenedUrl: shortenedLink.shortenedUrl,
+        createdAt: shortenedLink.createdAt.toISOString(),
       })
+    }
+  )
+
+  server.delete(
+    '/shortened-links/:id',
+    {
+      schema: {
+        tags: ['shortened-links'],
+        summary: 'Delete a shortened link',
+        description:
+          'Deletes a shortened link by its unique identifier. This action is permanent and cannot be undone.',
+        params: z.object({
+          id: z.string().uuid({ message: 'Invalid ID format' }).describe('The unique identifier of the shortened link to delete'),
+        }),
+        response: {
+          204: z.void().describe('Successfully deleted - no content returned'),
+          400: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Validation error - invalid ID format'),
+          404: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Not found - shortened link does not exist'),
+          500: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Internal server error'),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params
+
+      const result = await deleteShortenedLink({ id })
+
+      if (isLeft(result)) {
+        const error = unwrapEither(result)
+
+        if (error.message.includes('Validation error')) {
+          return reply.status(400).send({
+            message: error.message,
+          })
+        }
+
+        if (error.message.includes('not found')) {
+          return reply.status(404).send({
+            message: error.message,
+          })
+        }
+
+        return reply.status(500).send({
+          message: 'An unexpected error occurred',
+        })
+      }
+
+      return reply.status(204).send()
     }
   )
 }

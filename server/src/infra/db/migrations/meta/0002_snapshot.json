@@ -1,0 +1,79 @@
+{
+  "id": "671c6da7-aac1-43af-a98d-de7953726c94",
+  "prevId": "238dcff0-3cb2-4b92-b4c8-fbd3ea6159f8",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.shortened_links": {
+      "name": "shortened_links",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shortened_url": {
+          "name": "shortened_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "visits": {
+          "name": "visits",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "shortened_links_shortened_url_unique": {
+          "name": "shortened_links_shortened_url_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "shortened_url"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

@@ -1,0 +1,1 @@
+ALTER TABLE "shortened_links" ADD COLUMN "visits" integer DEFAULT 0 NOT NULL;
