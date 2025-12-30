@@ -1,11 +1,13 @@
 import { fastifyCors } from '@fastify/cors'
+import { fastifySwagger } from '@fastify/swagger'
+import { fastifySwaggerUi } from '@fastify/swagger-ui'
 import { fastify } from 'fastify'
 import {
   hasZodFastifySchemaValidationErrors,
+  jsonSchemaTransform,
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod'
-import { env } from '@/env'
 import { shortenedLinkRoutes } from './routes/shortened-link'
 
 const server = fastify()
@@ -30,7 +32,17 @@ server.register(fastifyCors, {
   origin: '*',
 })
 
-// console.log(env.DATABASE_URL)
+server.register(fastifySwagger, {
+  openapi: {
+    info: { title: 'Brev.ly Server API', version: '1.0.0' },
+  },
+  transform: jsonSchemaTransform,
+})
+
+server.register(fastifySwaggerUi, {
+  routePrefix: '/docs',
+})
+
 server.register(shortenedLinkRoutes)
 
 server.listen({ port: 3333, host: '0.0.0.0' }).then(() => {
