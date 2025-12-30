@@ -2,6 +2,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 import { createShortenedLink } from '@/app/functions/create-shortened-link'
 import { deleteShortenedLink } from '@/app/functions/delete-shortened-link'
+import { exportShortenedLinksCsv } from '@/app/functions/export-shortened-links-csv'
 import { getShortenedLinkById } from '@/app/functions/get-shortened-link-by-id'
 import { getShortenedLinks } from '@/app/functions/get-shortened-links'
 import { isLeft, unwrapEither } from '@/infra/shared/either'
@@ -88,6 +89,35 @@ export const shortenedLinkRoutes: FastifyPluginAsyncZod = async server => {
         pageSize: data.pageSize,
         totalPages: data.totalPages,
       })
+    }
+  )
+
+  server.get(
+    '/shortened-links/export/csv',
+    {
+      schema: {
+        tags: ['shortened-links'],
+        summary: 'Export shortened links to CSV',
+        description:
+          'Downloads a CSV file containing all shortened links with their complete information. The file includes ID, URL, shortened URL, visit count, and timestamps.',
+        response: {
+          200: {
+            type: 'string',
+            description: 'CSV file content with all shortened links',
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await exportShortenedLinksCsv()
+
+      const data = unwrapEither(result)
+
+      return reply
+        .header('Content-Type', 'text/csv; charset=utf-8')
+        .header('Content-Disposition', 'attachment; filename="shortened-links.csv"')
+        .status(200)
+        .send(data.csv)
     }
   )
 
