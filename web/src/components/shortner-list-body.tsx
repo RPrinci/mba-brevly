@@ -53,7 +53,10 @@ export function ShortnerListBody({ refreshTrigger }: ShortnerListBodyProps) {
       const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
-      link.setAttribute("download", `brevly-links-${new Date().toISOString().split("T")[0]}.csv`);
+      link.setAttribute(
+        "download",
+        `brevly-links-${new Date().toISOString().split("T")[0]}.csv`
+      );
       link.style.visibility = "hidden";
 
       // Trigger download
@@ -72,7 +75,10 @@ export function ShortnerListBody({ refreshTrigger }: ShortnerListBodyProps) {
   };
 
   return (
-    <div className="w-full bg-white">
+    <div className="w-full bg-white relative">
+      {/* Progress Bar */}
+      {isLoading && <div className="progress-bar" />}
+
       {/* Header */}
       <div className="p-6 pb-4 flex items-center justify-between border-b border-gray-200">
         <h2 className="text-lg font-bold text-gray-600">Meus links</h2>
@@ -115,7 +121,7 @@ export function ShortnerListBody({ refreshTrigger }: ShortnerListBodyProps) {
 
       {/* List Links */}
       {!isLoading && !error && links.length > 0 && (
-        <div>
+        <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
           {links.map((link) => (
             <ShortnerListLink
               key={link.id}

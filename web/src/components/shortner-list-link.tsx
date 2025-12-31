@@ -1,6 +1,6 @@
 import { CopySimple, Trash } from "@phosphor-icons/react";
 import { useState } from "react";
-import { deleteShortenedLink } from "../services/api";
+import { deleteShortenedLink, getOriginalUrlByShortened } from "../services/api";
 
 interface ShortnerListLinkProps {
   id: string;
@@ -19,10 +19,12 @@ export function ShortnerListLink({
 }: ShortnerListLinkProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showCopySuccess, setShowCopySuccess] = useState(false);
+  const [currentVisits, setCurrentVisits] = useState(accessCount);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(`https://${shortUrl}`);
+      const fullUrl = `${window.location.origin}/r/${shortUrl}`;
+      await navigator.clipboard.writeText(fullUrl);
       setShowCopySuccess(true);
       setTimeout(() => {
         setShowCopySuccess(false);
@@ -60,10 +62,20 @@ export function ShortnerListLink({
       {/* Link Info */}
       <div className="flex-1 min-w-0">
         <a
-          href={`https://${shortUrl}`}
+          href={`/r/${shortUrl}`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-base font-semibold hover:text-blue-dark transition-colors block mb-1"
+          onClick={async () => {
+            // Increment visit count when link is clicked
+            try {
+              const updatedLink = await getOriginalUrlByShortened(shortUrl);
+              // Update the UI immediately with the new visit count
+              setCurrentVisits(updatedLink.visits);
+            } catch (err) {
+              console.error("Failed to increment visit count:", err);
+            }
+          }}
         >
           brev.ly/{shortUrl}
         </a>
@@ -73,7 +85,7 @@ export function ShortnerListLink({
       {/* Access Count & Actions */}
       <div className="flex items-center gap-4 ml-4">
         <span className="text-sm text-gray-400 font-normal whitespace-nowrap">
-          {accessCount} acessos
+          {currentVisits} acessos
         </span>
 
         <div className="flex items-center gap-2">

@@ -50,3 +50,12 @@ export async function createShortenedLink(data: {
   const response = await api.post<ShortenedLink>("/shortened-links", data);
   return response.data;
 }
+
+export async function getOriginalUrlByShortened(
+  shortenedUrl: string
+): Promise<ShortenedLink> {
+  const response = await api.get<ShortenedLink>(
+    `/shortened-links/shortened/${shortenedUrl}`
+  );
+  return response.data;
+}
