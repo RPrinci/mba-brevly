@@ -101,10 +101,7 @@ export const shortenedLinkRoutes: FastifyPluginAsyncZod = async server => {
         description:
           'Downloads a CSV file containing all shortened links with their complete information. The file includes ID, URL, shortened URL, visit count, and timestamps.',
         response: {
-          200: {
-            type: 'string',
-            description: 'CSV file content with all shortened links',
-          },
+          200: z.string().describe('CSV file content with all shortened links'),
         },
       },
     },
