@@ -1,4 +1,4 @@
-import { theme } from "tailwindcss/defaultTheme";
+import defaultTheme from "tailwindcss/defaultTheme";
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -9,7 +9,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Open Sans", ...theme.fontFamily.sans],
+        sans: ["Open Sans", ...defaultTheme.fontFamily.sans],
       },
       colors: {
         blue: {
@@ -18,7 +18,7 @@ export default {
         },
         gray: {
           100: "#F9F9FB",
-          200: "#E4E6EC",
+          200: "#E0E2E9",
           300: "#CDCFD5",
           400: "#74798B",
           500: "#4D506C",
