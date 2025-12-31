@@ -4,6 +4,7 @@ import { createShortenedLink } from '@/app/functions/create-shortened-link'
 import { deleteShortenedLink } from '@/app/functions/delete-shortened-link'
 import { exportShortenedLinksCsv } from '@/app/functions/export-shortened-links-csv'
 import { getShortenedLinkById } from '@/app/functions/get-shortened-link-by-id'
+import { getShortenedLinkByShortenedUrl } from '@/app/functions/get-shortened-link-by-shortened-url'
 import { getShortenedLinks } from '@/app/functions/get-shortened-links'
 import { isLeft, unwrapEither } from '@/infra/shared/either'
 
@@ -173,6 +174,91 @@ export const shortenedLinkRoutes: FastifyPluginAsyncZod = async server => {
         }
 
         if (error.message.includes('not found')) {
+          return reply.status(404).send({
+            message: error.message,
+          })
+        }
+
+        return reply.status(500).send({
+          message: 'An unexpected error occurred',
+        })
+      }
+
+      const shortenedLink = unwrapEither(result)
+
+      return reply.status(200).send({
+        id: shortenedLink.id,
+        url: shortenedLink.url,
+        shortenedUrl: shortenedLink.shortenedUrl,
+        visits: shortenedLink.visits,
+        createdAt: shortenedLink.createdAt.toISOString(),
+        updatedAt: shortenedLink.updatedAt.toISOString(),
+      })
+    }
+  )
+
+  server.get(
+    '/shortened-links/shortened/:shortenedUrl',
+    {
+      schema: {
+        tags: ['shortened-links'],
+        summary: 'Get original URL by shortened URL',
+        description:
+          'Retrieves the original URL for a shortened link. This endpoint validates that the target URL is accessible, increments the visit count, and returns the original URL. Returns 404 if the shortened link does not exist or if the target URL is not accessible.',
+        params: z.object({
+          shortenedUrl: z
+            .string()
+            .min(1)
+            .regex(
+              /^[a-zA-Z0-9_-]+$/,
+              'Shortened URL must contain only alphanumeric characters, hyphens, and underscores'
+            )
+            .describe('The shortened URL identifier'),
+        }),
+        response: {
+          200: z
+            .object({
+              id: z.string().describe('The unique identifier'),
+              url: z.string().describe('The original URL'),
+              shortenedUrl: z.string().describe('The shortened URL identifier'),
+              visits: z.number().describe('Number of times the link has been visited (after increment)'),
+              createdAt: z.string().describe('Creation timestamp'),
+              updatedAt: z.string().describe('Last update timestamp'),
+            })
+            .describe('Successfully retrieved original URL'),
+          400: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Validation error - invalid shortened URL format'),
+          404: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Not found - shortened link does not exist or target URL is not accessible'),
+          500: z
+            .object({
+              message: z.string(),
+            })
+            .describe('Internal server error'),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { shortenedUrl } = request.params
+
+      const result = await getShortenedLinkByShortenedUrl({ shortenedUrl })
+
+      if (isLeft(result)) {
+        const error = unwrapEither(result)
+
+        if (error.message.includes('Validation error')) {
+          return reply.status(400).send({
+            message: error.message,
+          })
+        }
+
+        if (error.message.includes('not found') || error.message.includes('not accessible')) {
           return reply.status(404).send({
             message: error.message,
           })
